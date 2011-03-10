@@ -10,11 +10,7 @@
     },
     "experimental": {
       "services": [
-        {
-          "suite": "id",
-          "method": "getProfile",
-          "frame": "http://localhost:8123/tools/aboutme_svc.html"
-        }
-      ]      
+        { "profile.get": "/service" }
+      ]
     }
 }

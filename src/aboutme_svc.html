@@ -1,13 +1,38 @@
 <html>
 <head></head>
+<script src="/static/jschannel.js"></script>
 <script>
-var id = {
-  
-  getProfile: function(requested_fields) {
-    
-    function parseSelector(src) {
-      
+
+var chan = Channel.build({window: window.parent, origin: "*", scope: "aboutme"});
+var gPendingRequest;
+var gOfferedData;
+
+chan.bind("profile.get", function(t, args) {
+
+  gOfferedData = getProfile(args);
+  renderOffer();
+
+/*  t.delayReturn(true);
+  // when the user consents, we'll return
+  gPendingRequest = (function() {
+    return {
+      confirm: function(result) {
+        t.complete(result);
+      }
     }
+  })();*/
+});
+
+chan.bind("confirm", function(t, args) {
+  return gOfferedData;
+});
+
+function confirm()
+{
+  gPendingRequest.confirm(gOfferedData);
+}
+
+function getProfile(requested_fields) {
   
     function extractInto(srcObj, dstObj, tArray, idx) {
       var term = tArray[idx];
@@ -32,14 +57,37 @@ var id = {
         extractInto(full_profile, result, requested_fields[f].split("/"), 0);
       }
     }
-    return ["ok", result];
+    return result;
+}
+
+function renderOffer()
+{
+  var container = document.getElementById("message");
+  container.innerHTML = "";
+  container.appendChild(document.createTextNode("Imagine some nice rendering of this data..."));
+  for (var k in gOfferedData) {
+    var div = document.createElement("div");
+    div.appendChild(document.createTextNode(k + ": " + JSON.stringify(gOfferedData[k])));
+    container.appendChild(div);
   }
 }
+
 </script>
 <style>
-BODY {font:9pt Helvetica}
+BODY {
+  font:9pt Helvetica;
+  background-color:#f0f0f8;
+}
+.branding {
+  font: small-caption;
+  margin-bottom:6px;
+  color:black;
+}
 </style>
 <body>
-(This is the confirmation UI for about:me)
+<div class="branding">about:me by Mozilla</div>
+
+<div id="message"></div>
+
 </body>
 </html>
