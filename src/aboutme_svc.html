@@ -9,7 +9,9 @@
 
 <script>
 
-var chan, gPendingRequest, gOfferedData;
+var chan, gPendingRequest;
+var gOfferedData;       // fields of the user's currently selected profile that match the requested fields
+var gSelectedData;      // map of indexes into the user's multi-valued fields; -1 means a field was cancelled
 var gRequestedArguments;
 var gProfiles = [];
 var gUserData = new UserData();
@@ -37,6 +39,7 @@ function renderProfilePicker() {
   var profilePicker = $("#profilePicker");
   profilePicker.empty();
   gProfiles = {};
+  gSelectedData = {};
 
   gUserData.getProfileKeys(function(keys) {
     for (var i=0;i<keys.length;i++) {
@@ -64,7 +67,25 @@ function getOfferedData(requested_fields) {
       if (srcObj[term]) {
         var val = srcObj[term];
         if (idx+1 == tArray.length) {
-          dstObj[term] = val;
+          
+          if (gSelectedData[requested_field] != undefined) {
+            if (gSelectedData[requested_field] == -1) {
+              // user has suppressed value; return
+            } else {
+              if ($.isArray(val)) {
+                dstObj[term] = [val[gSelectedData[requested_field]]];
+              } else {
+                dstObj[term] = val;          
+              }
+            }
+          } else {
+            if ($.isArray(val)) {
+              gSelectedData[requested_field] = 0;
+              dstObj[term] = [val[0]];
+            } else {
+              dstObj[term] = val;
+            }
+          }
         } else {
           if (!dstObj[term]) dstObj[term] = {};
           extractInto(val, dstObj[term], tArray, idx+1);
@@ -73,13 +94,13 @@ function getOfferedData(requested_fields) {
     }
     
     var result = {};
-
     var profile_data = getSelectedProfile();
     if (profile_data) {
       var profilePoCo = profile_data.toPoCo();
       for (var i=0;i<requested_fields.length;i++)
       {
-        extractInto(profilePoCo, result, requested_fields[i].split("/"), 0);
+        var requested_field = requested_fields[i];
+        extractInto(profilePoCo, result, requested_field.split("/"), 0);
       }
     }
     return result;
@@ -97,7 +118,51 @@ function renderTypeValueColumn(container, label)
   return value;
 }
 
-POCO_RENDERERS =
+function renderValueOptions(val, valueBox, container, optionKey)
+{
+  if (gSelectedData[optionKey] == undefined)  {
+    gSelectedData[optionKey] = 0;
+    gOfferedData[optionKey] = [val[0]];
+  }
+  var options = [];
+  var labels = [];
+  if (val.length > 1) {
+    var arrow = $("<div class='optionArrow'/>");
+    valueBox.append(arrow);
+    arrow.click(function(evt) {
+      options[gSelectedData[optionKey]].slideUp(function() {
+        gSelectedData[optionKey] += 1;
+        if (gSelectedData[optionKey] == options.length) selected = 0;
+        labels[gSelectedData[optionKey]].css( { 
+          left: evt.clientX - 60,
+          top: evt.clientY + 10
+        });
+        labels[gSelectedData[optionKey]].fadeIn();
+        options[gSelectedData[optionKey]].slideDown();
+        gOfferedData[optionKey] = [val[gSelectedData[optionKey]]];
+        
+        window.setTimeout(function() {labels[gSelectedData[optionKey]].fadeOut()}, 1000);
+      });
+    });
+  }
+
+  for (var i=0;i<val.length;i++) {
+    var optBox = $("<div class='valueOption'/>");
+    options.push(optBox);
+    dump("OptBox is " + optBox + "\n");
+    
+    var labelBox = $("<div class='valueOptionLabel'/>").text(val[i].type);
+    labels.push(labelBox);
+    labelBox.hide();
+    container.append(labelBox);
+    
+    optBox.text(val[i].value);
+    if (i != 0) optBox.hide();
+    valueBox.append(optBox);
+  }
+}
+
+var POCO_RENDERERS =
 {
   name: function(container, val) {
     // XX L10N for name order
@@ -127,12 +192,12 @@ POCO_RENDERERS =
     if (val.postalCode || val.country) valueBox.append($("<div/>").text(val.postalCode + " " + val.country ));
   },
   phoneNumbers: function(container, val) {
-    val = val[0];
-    renderTypeValueColumn(container, "Phone:").text(val.value);  
+    var valueBox = renderTypeValueColumn(container, "Phone:");
+    renderValueOptions(val, valueBox, container, "phoneNumbers");
   },
   emails: function(container, val) {
-    val = val[0];
-    renderTypeValueColumn(container, "Email:").text(val.value);
+    var valueBox = renderTypeValueColumn(container, "Email:");
+    renderValueOptions(val, valueBox, container, "emails");
   }
 
 }
@@ -140,24 +205,34 @@ POCO_RENDERERS =
 function renderOffer()
 {
   try {
-    gOfferedData = getOfferedData(gRequestedArguments);
-
     var container = document.getElementById("message");
     container.innerHTML = "";
 
-    for (var k in gOfferedData) {
-      if (gOfferedData.hasOwnProperty(k)) {
+    var profile_data = getSelectedProfile().toPoCo();
+
+    gOfferedData = {};
+    for (var i=0;i<gRequestedArguments.length;i++) {
+      var key = gRequestedArguments[i];
+      if (profile_data.hasOwnProperty(key))
+      {
         var aDiv = $("<div class='previewValue'/>");
         $(container).append(aDiv);
-        
-        if (POCO_RENDERERS[k]) {
-          POCO_RENDERERS[k](aDiv, gOfferedData[k]);
+
+        if (POCO_RENDERERS[key]) {
+          POCO_RENDERERS[key](aDiv, profile_data[key]);
         } else {
-          renderTypeValueColumn(aDiv, k + ":").text(JSON.stringify(gOfferedData[k]));
+          renderTypeValueColumn(aDiv, key + ":").text(JSON.stringify(profile_data[key]));
+        }
+
+        if (gSelectedData.hasOwnProperty(key)) {
+          gOfferedData[key] = [profile_data[key][gSelectedData[key]]];
+        } else {
+          gOfferedData[key] = profile_data[key];          
         }
       }
     }
   } catch (e) {
+    dump(e + "\n");
     console.log(e);
   }
 }
@@ -208,6 +283,34 @@ BODY {
   display:inline-block;
   vertical-align:top;
   font:9pt "lucida grande",tahoma,verdana,arial,sans-serif;
+  max-width:144px;
+  min-width:144px;
+  margin-right:6px;
+  overflow-x: hidden;
+  position:relative;
+}
+.valueOption {
+  display:inline-block;
+}
+.valueOptionLabel {
+  position:absolute;
+  display:inline-block;
+  top:14px;
+  left:4px;
+  height:12px;
+  background-color:#f0f0f0;
+  border:1px solid #c0c0c0;
+  padding:1px;
+  font-size:8pt;
+}
+.optionArrow {
+  width:6px;
+  height:12px;
+  margin-left:2px;
+  float:right;
+  background-color:red;
+  display:inline-block;
+  cursor:pointer;
 }
 
 </style>

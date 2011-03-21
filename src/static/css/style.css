@@ -40,6 +40,16 @@ INPUT[type=text] {
   border-bottom:solid 1px #d4d0cc;
   
 }
+#addProfile {
+  float:right;
+  font:8pt "lucida grande",tahoma,verdana,arial,sans-serif;
+  margin-top:2px;
+}
+#addProfile a {
+  color:#3B5998;
+  text-decoration:none;
+}
+
 #encryptionBox {
   text-align:right;
   display:inline-block;

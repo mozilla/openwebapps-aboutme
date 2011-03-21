@@ -84,9 +84,11 @@ var gNewFieldAnimate = null;
 function obscureValue(val, clearSuffix)
 {
   var ret = "";
-  for (var i=0;i<val.length;i++) {
-    if (clearSuffix && i >= val.length - clearSuffix) ret += val[i];
-    else ret += "X";
+  if (val) {
+    for (var i=0;i<val.length;i++) {
+      if (clearSuffix && i >= val.length - clearSuffix) ret += val[i];
+      else ret += "X";
+    }
   }
   return ret;
 }
@@ -212,7 +214,7 @@ function renderProfile(aProfile) {
   registerAddFn("addresses", aProfile.addAddress);
   registerAddFn("phoneNumbers", aProfile.addPhoneNumber);
 
-  //UserDataEncryption.setKeyPhrase("secret");
+//  UserDataEncryption.setKeyPhrase("secret");
   if (UserDataEncryption.keyIsActive()) {
     registerAddFn("paymentCards", aProfile.addPaymentCard);
   } else {
@@ -280,7 +282,11 @@ function renderProfile(aProfile) {
 function renderJSON() {
   $("#dump").empty();
   for (var k in gProfiles) {
-    $("#dump").append($("<pre>").text(js_beautify(JSON.stringify(gProfiles[k].toPoCo()))));
+    $("#dump").append($("<pre>").text(
+      js_beautify(JSON.stringify(gProfiles[k].toPoCo())) + "\n" +
+      js_beautify(JSON.stringify(gProfiles[k].serialize()))
+      )
+    );
   }
 }
 
@@ -297,6 +303,7 @@ function renderJSON() {
 <div id="info">
 
 <div id="pickerBar">Displaying profile: <select id="profilePicker"></select>
+<div id="addProfile"><a href="#">Add profile</a></div>
 </div>
 
 <div>

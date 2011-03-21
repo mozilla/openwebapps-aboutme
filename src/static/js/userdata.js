@@ -184,6 +184,9 @@ UserProfile = function(data) {
       this.key = obj.key;
       this.name = obj.name;
       this.obj = obj.obj;
+      
+      // 
+      
     } else if (typeof data == "object") {
       this.key = data.key;
       this.name = data.name;
@@ -208,7 +211,7 @@ UserProfile.prototype= {
           if (typeof this.obj[k] == "object" && this.obj[k].encryptedValue) {
             target.obj[k] = this.obj[k];
           } else {
-            target.obj[k] = UserDataEncryption.encrypt(this.obj[k]);
+            target.obj[k] = { encryptedValue: UserDataEncryption.encrypt(this.obj[k]) };
           }
         } else {
           target.obj[k] = this.obj[k];
