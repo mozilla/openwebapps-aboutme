@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>About Me API Tests</title>
+
+<script type="text/javascript" src="/static/js/eventmixin.js"></script>
+<script type="text/javascript" src="/static/js/typed-storage.js"></script>
+<script type="text/javascript" src="/static/js/userdata.js"></script>
+
+
+  <script type="text/javascript" src="doctestjs/doctest.js"></script>
+  <link rel="stylesheet" type="text/css" href="doctestjs/doctest.css" />
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8" />
+  <style type="text/css" media="screen">
+      iframe {
+        display: none;
+        position: fixed;
+        width: 100%;
+        height: 100%;
+        top: 0;
+        left: 0;
+      }
+  </style>
+</head>
+<body id="testingBody" class="autodoctest">
+<h2> About Me API Tests </h2>
+
+<p> These API tests run in a local environment provided by a test
+  server.  If you run them as files, the links will not work
+  properly.</p>
+
+<div class="test">
+<h3>Clean Up Prior Test Runs</h3>
+
+<pre class="doctest">
+$ storage = window.localStorage;
+$ for (var i =storage.length-1; i>=0; i--) {  var key = storage.key(i);  var item = storage.removeItem(key); }
+</pre>
+</div>
+
+<div class="test">
+<h3>Presence of objects</h3>
+
+Is everything in place?
+
+<pre class="doctest">
+$ UserData
+function UserData(browserStorage) {...}
+</pre>
+</div>
+
+
+<div class="test">
+<h3>Profile functions</h3>
+
+We'll create a default user and make sure the functions work.
+
+<pre class="doctest">
+$ var user = new UserData()
+$ keysSpy = Spy("keys");
+$ user.getProfileKeys(keysSpy);
+keys(["default"])
+</pre>
+
+Modify the default profile:
+
+<pre class="doctest">
+$ profile = undefined;
+$ user.getProfile("default", function(x) { profile = x })
+$ profile
+[UserProfile key="default" name="Default"]
+$ profile.setName("John", "Doe");
+$ profile.toPoCo()
+{name: {familyName: "Doe", givenName: "John"}}
+$ profile.setName("John", "Doe");
+$ profile.addEmail({type:"work", value:"jdoe@work.com"})
+$ profile.addAddress({type:"home", streetAddress:"123 Home Street", locality:"Homeville", region:"HO", postalCode:55555, country:"US"})
+$ profile.addAccount({domain:"coolsite.com", username:"jdoe", userid:12345})
+$ profile.toPoCo()
+{
+  accounts: [{domain: "coolsite.com", userid: 12345, username: "jdoe"}],
+  addresses: [
+    {
+      country: "US",
+      locality: "Homeville",
+      postalCode: 55555,
+      region: "HO",
+      streetAddress: "123 Home Street",
+      type: "home"
+    }
+  ],
+  emails: [{type: "work", value: "jdoe@work.com"}],
+  name: {familyName: "Doe", givenName: "John"}
+}
+$ user.saveProfile(profile, function() {});
+$ profile.deleteAddress({type:"home", streetAddress:"123 Home Street", locality:"Homeville", region:"HO", postalCode:55555, country:"US"})
+$ profile.deleteEmail({type:"work", value:"jdoe@work.com"})
+$ profile.deleteAccount({domain:"coolsite.com", username:"jdoe", userid:12345})
+$ profile.toPoCo()
+{name: {familyName: "Doe", givenName: "John"}}
+</pre>
+
+Test deletion by index
+
+<pre class="doctest">
+$ for (i=0;i<3;i++) profile.addEmail({"type":"test","value":""+i})
+$ profile.toPoCo()
+$ profile.deleteEmail(1)
+$ profile.toPoCo()
+{emails: [{type: "test", value: "0"}, {type: "test", value: "2"}], name: {familyName: "Doe", givenName: "John"}}
+$ profile.deleteEmail(0)
+$ profile.deleteEmail(0)
+
+$ for (i=0;i<3;i++) profile.addAddress({"type":"test","streetAddress":""+i})
+$ profile.deleteAddress(1)
+$ profile.toPoCo()
+{
+  addresses: [{streetAddress: "0", type: "test"}, {streetAddress: "2", type: "test"}],
+  name: {familyName: "Doe", givenName: "John"}
+}
+$ profile.deleteAddress(0)
+$ profile.deleteAddress(0)
+
+$ for (i=0;i<3;i++) profile.addAccount({"domain":"test","userid":""+i})
+$ profile.deleteAccount(1)
+$ profile.toPoCo()
+{accounts: [{domain: "test", userid: "0"}, {domain: "test", userid: "2"}], name: {familyName: "Doe", givenName: "John"}}
+$ profile.deleteAccount(0)
+$ profile.deleteAccount(0)
+
+$ for (i=0;i<3;i++) profile.addPhoneNumber({"type":"test","value":""+i})
+$ profile.deletePhoneNumber(1)
+$ profile.toPoCo()
+{name: {familyName: "Doe", givenName: "John"}, phoneNumbers: [{type: "test", value: "0"}, {type: "test", value: "2"}]}
+$ profile.deletePhoneNumber(0)
+$ profile.deletePhoneNumber(0)
+
+
+</pre>
+
+Make another profile
+
+<pre class="doctest">
+$ user.addProfile({key:"home", name:"Home"}, function() {})
+$ user.getProfileKeys(keysSpy);
+keys(["home", "default"])
+$ user.getProfile("home", function(x) { profile = x })
+$ profile
+[UserProfile key="home" name="Home"]
+</pre>
+
+
+
+Test encrypted fields
+
+<pre class="doctest">
+$ var card = profile.addPaymentCard();
+$ card
+{CCV: "", billingAddress: "", brand: "", cardholder: "", expiration: "", number: "", type: "personal"}
+$ AboutMeEncryption.setKeyPhrase("sekrit");
+$ var enc = AboutMeEncryption.encrypt(card);
+$ AboutMeEncryption.decrypt(enc);
+{CCV: "", billingAddress: "", brand: "", cardholder: "", expiration: "", number: "", type: "personal"}
+
+</pre>
+
+
+</div>
+
+
+</body>
+</script>
+</html>

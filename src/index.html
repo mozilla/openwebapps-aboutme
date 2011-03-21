@@ -1,199 +1,290 @@
 <html>
 <head>
 <title>About Me</title>
+<script type="text/javascript" src="/static/js/eventmixin.js"></script>
+<script type="text/javascript" src="/static/js/typed-storage.js"></script>
+<script type="text/javascript" src="/static/js/userdata.js"></script>
 <script type="text/javascript" src="/static/js/jquery-1.4.4.min.js"></script>
 <script type="text/javascript" src="/static/js/jquery-ui-1.8.10.custom.min.js"></script>
-<link type="text/css" href="/static/css/custom-theme/jquery-ui-1.8.10.custom.css" rel="stylesheet" />	
+<script type="text/javascript" src="/static/js/jquery.watermark.min.js"></script>
+<script type="text/javascript" src="http://ajax.microsoft.com/ajax/jquery.templates/beta1/jquery.tmpl.min.js"></script>
+
+<script type="text/html" src="/static/templates.html"></script>
+<link type="text/css" href="/static/css/custom-theme/jquery-ui-1.8.10.custom.css" rel="stylesheet" />
+<link type="text/css" href="/static/css/style.css" rel="stylesheet" />
 <link rel="application-manifest" href="/aboutme.webapp"></link>
 <script>
+var gUserData = new UserData();
+var gProfiles = {};
 
-function val(l) 
-{
-  var v = document.forms[0][l];
-  if (v.item)
-  {
-    for (var i=0;i<v.length;i++) {
-      if (v[i].checked) return v[i].value;
-    }
-    return null;
-  } else {
-    return v.value;
-  }
-}
-function set(l, v) 
-{
-  dump(l + " " + v + "\n");
-  document.forms[0][l].value = v;
-}
-
-function save()
-{
-  var profile = {};
-  profile.name = {};
-  profile.name.givenName = val("givenName");
-  profile.name.familyName = val("familyName");
-  profile.emails = []
-  profile.emails.push({value:val("email")});
-  profile.addresses = [];
-  profile.addresses.push({
-    streetAddress: val("address/street"),
-    city: val("address/city"),
-    state: val("address/state"),
-    postalCode: val("address/postalCode"),
-    country: val("address/country")
-  });
-  profile.gender = val("gender")
-  dump("gender is " + val("gender") + "\n");
+function render() {
   
-  var bdayRaw = val("birthday");
-  try {
-    function pad2(val) {
-      if (val < 9) return "0" + val;
-      return val;
-    }
-    var d = new Date(bdayRaw)
-    profile.birthday = (""+d.getFullYear()) + "-" + (pad2(d.getMonth()+1)) + "-" + (pad2(d.getDate()))
-  } catch (e) {}
-  
-  window.localStorage.setItem("profile", JSON.stringify(profile));
-  var result = document.getElementById("control_result");
-  result.innerHTML = "Saved&nbsp;";
-  result.style.opacity = 1.0;
 }
 
-function init()
-{
+function getSelectedProfile() {
+  return gProfiles[$("#profilePicker").val()];
+
+}
+function refreshProfileView() {
+  renderProfile(getSelectedProfile());
+}
+
+function save() {
+  gUserData.saveProfile(getSelectedProfile(), saveComplete);
+}
+
+function saveComplete() {
+}
+
+function init() {
+  $("#simpleValueTemplate").template("simpleValueTemplate")
+  $("#addressValueTemplate").template("addressValueTemplate")
+  $("#paymentCardValueTemplate").template("paymentCardValueTemplate")
   $("#info").tabs();
-  $("#birthday").datepicker();
+  $("#profilePicker").change(refreshProfileView);
+  
+  renderProfilePicker();
+  renderEncryptionBox();
+  refreshProfileView();
+}
 
-  var data = window.localStorage.getItem("profile");
-  if (data) {
-    var profile = JSON.parse(data);
-    if (profile)
-    {
-      if (profile.name) {
-        set("givenName", profile.name.givenName);
-        set("familyName", profile.name.familyName);
-      }
-      if (profile.emails && profile.emails.length > 0) {
-        set("email", profile.emails[0].value);
-      }
-      if (profile.addresses && profile.addresses.length > 0) {
-        set("address/street", profile.addresses[0].streetAddress);
-        set("address/city", profile.addresses[0].city);
-        set("address/state", profile.addresses[0].state);
-        set("address/postalCode", profile.addresses[0].postalCode);
-        set("address/country", profile.addresses[0].country);
-      }
+function renderProfilePicker() {
+  var profilePicker = $("#profilePicker");
+  profilePicker.empty();
+  gProfiles = {};
+
+  gUserData.getProfileKeys(function(keys) {
+    for (var i=0;i<keys.length;i++) {
+      gUserData.getProfile(keys[i], function(aProfile) { // XX async
+        gProfiles[keys[i]] = aProfile;
+        profilePicker.append($("#profile_option_tmpl").tmpl(aProfile));
+      });
+    }
+  });
+}
+
+function renderEncryptionBox() {
+  var encryptionBox = $("#encryptionBox");
+  encryptionBox.empty();
+
+  if (UserDataEncryption.keyIsActive()) {
+    encryptionBox.append($("#encryption_box_havekey_tmpl").tmpl());
+  } else {
+    if (getSelectedProfile().hasAnyEncryptedFields()) {
+      encryptionBox.append($("#encryption_box_encryptnokey_tmpl").tmpl());
+    } else {
+      encryptionBox.append($("#encryption_box_noencrypt_tmpl").tmpl());
     }
   }
-  
-  var s = "";
-  for (var i=0;i<AdCategories.length;i++)
-  {
-    s += "<input type=checkbox> " + AdCategories[i] + "<br>";
+}
+
+var gActiveField = null;
+var gNewFieldAnimate = null;
+
+function obscureValue(val, clearSuffix)
+{
+  var ret = "";
+  for (var i=0;i<val.length;i++) {
+    if (clearSuffix && i >= val.length - clearSuffix) ret += val[i];
+    else ret += "X";
   }
-  document.getElementById("ad_interests").innerHTML = s;
+  return ret;
+}
+
+/* Renders the entire profile UI */
+function renderProfile(aProfile) {
+
+  /* Helper function to bind the "add" link */
+  function registerAddFn(aType, anAddFn) {
+    $("#add_list_item_" + aType).click(function() {
+      gNewFieldAnimate = gActiveField = anAddFn.apply(aProfile);
+      save();
+      renderProfile(aProfile);
+      renderJSON();
+      $(".isnew").hide();
+      window.setTimeout(function() {
+        $(".isnew").slideDown(250, function() {$(".isnew").focus()});
+        return false;
+      }, 1);
+    });
+  }
+
+  /* Helper function to save a changed field back to the model */
+  function saveFieldChange(event, options) {
+    var val = $(event.target).val();
+    var split = $(event.target).attr("id").split("_");
+    var type = split[1];
+    if (split.length == 2) {
+      profileData[type] = val;
+    } else {
+      var base = profileData[type];
+      for (var i=2;i<split.length - 1;i++) {
+        if (!base[split[i]]) base[split[i]] = {};
+        base = base[split[i]];
+      }
+      base[split[i]] = val;
+    }
+    save();
+    renderJSON();
+    
+    if (options && options.obscureValue) {
+      $(event.target).val(obscureValue(val, options.clearSuffix));
+    }
+  }
+
+
+  var profile = $("#profiledetail");
+  profile.empty();
+  var payment = $("#paymentdetail");
+  payment.empty();
+  
+  var profileData = aProfile.toPoCo();
+  
+  profile.append($("#name_row_tmpl").tmpl(profileData.name ? profileData.name : {}));
+  $("#field_name_givenName").watermark("Given (first) name");
+  $("#field_name_familyName").watermark("Family (last) name");
+
+  /*
+  profile.append($("#radio_row_tmpl").tmpl({label:"Gender", name:"gender", options: 
+    [ {value:"F", label:"Female"},
+      {value:"M", label:"Male"},
+      {value:"O", label:"More..."}
+    ]}));
+  */
+  
+  profile.append($("#basic_row_tmpl").tmpl({
+    label:"Birthday", 
+    name:"birthday", 
+    width:1,
+    value: profileData.birthday ? profileData.birthday : ""
+  }));
+  $(document.forms[0]["birthday"]).datepicker();
+  
+  profile.append($("#typed_list_row_tmpl").tmpl({
+    label:"Emails", 
+    name:"emails", 
+    itemLabel: "email address",
+    typeLabels: [{type:"work",label:"Work"}, {type:"home",label:"Home"}],
+    values: profileData.emails ? profileData.emails : [],
+    renderValue: function(x) {return x.value},
+    itemTemplate: "simpleValueTemplate"
+  }));  
+  
+  profile.append($("#typed_list_row_tmpl").tmpl({
+    label:"Addresses", 
+    name:"addresses", 
+    itemLabel: "street address",
+    typeLabels: [{type:"work",label:"Work"}, {type:"home",label:"Home"}],
+    values: profileData.addresses ? profileData.addresses : [],
+    itemTemplate: "addressValueTemplate",
+    renderValue: function(x) {return x.value}    
+  }));
+  profile.append($("#typed_list_row_tmpl").tmpl({
+    label:"Phone Numbers", 
+    name:"phoneNumbers", 
+    itemLabel: "phone number",
+    typeLabels: [{type:"work",label:"Work"}, {type:"mobile",label:"Mobile"}, 
+                 {type:"home",label:"Home"},{type:"workfax",label:"Work Fax"},
+                 {type:"homefax",label:"Home Fax"}],
+    values: profileData.phoneNumbers ? profileData.phoneNumbers : [],
+    itemTemplate: "simpleValueTemplate",    
+    renderValue: function(x) {return x.value}
+  }));
+  profile.append($("#account_list_row_tmpl").tmpl({
+    label:"Accounts", 
+    name:"accounts", 
+    itemLabel: "online account",
+    values: profileData.accounts ? profileData.accounts : []
+  }));
+
+  payment.append($("#typed_list_row_tmpl").tmpl({
+    label:"Payment Cards", 
+    name:"paymentCards", 
+    itemLabel: "payment card",
+    typeLabels: [{type:"work",label:"Work"}, {type:"personal",label:"Personal"}],
+    values: profileData.paymentCards ? profileData.paymentCards : [],
+    obscureValue: obscureValue,
+    itemTemplate: "paymentCardValueTemplate",
+    renderValue: function(x) {return x.value}
+  }));
+  
+  registerAddFn("emails", aProfile.addEmail);
+  registerAddFn("addresses", aProfile.addAddress);
+  registerAddFn("phoneNumbers", aProfile.addPhoneNumber);
+
+  //UserDataEncryption.setKeyPhrase("secret");
+  if (UserDataEncryption.keyIsActive()) {
+    registerAddFn("paymentCards", aProfile.addPaymentCard);
+  } else {
+    $("#add_list_item_paymentCards").text("Provide encryption key to add new payment card");
+  }
+
+  $("#field_birthday").watermark("Birthday (M/D/Y)");
+  $(".emails_value").watermark("Email Address");
+  $(".address_street").watermark("Street Address");
+  $(".address_city").watermark("City");
+  $(".address_state").watermark("State"); //XX l10n this
+  $(".address_postalCode").watermark("ZIP");
+  $(".address_country").watermark("Country");
+  $(".phoneNumbers_value").watermark("Phone Number");
+  
+  $(".paymentCards_cardholder").watermark("Name as it appears on card");
+  $(".paymentCards_billingAddress").watermark("Billing address");
+  $(".paymentCards_number").watermark("Credit Card #");
+  $(".paymentCards_expiration").watermark("Expiration Date");
+  $(".paymentCards_CCV").watermark("CCV");
+  
+  $(".remove_list_item").click(function() {
+    var split = $(this).attr("id").split(":");
+    var type = split[1];
+    var id = split[2];
+    $("#item_list_" + type + "_" + id).slideUp(250, function() {
+      aProfile.deleteObject(type, id);
+      save();
+      renderProfile(aProfile);
+      renderJSON();
+    });
+  });
+
+
+  var keyupTimer;
+  $(".item_value_edit_field").change(function(evt) {
+    if (keyupTimer) {
+      window.clearTimeout(keyupTimer);
+      keyupTimer = null;
+    }
+    saveFieldChange(evt);
+  });
+  $(".item_value_edit_field").keyup(function(evt) {
+    if (keyupTimer) window.clearTimeout(keyupTimer);
+    keyupTimer = window.setTimeout(function() {saveFieldChange(evt)}, 1000);
+  });
+
+  $(".item_encvalue_edit_field").change(function(evt) {
+    if (keyupTimer) {
+      window.clearTimeout(keyupTimer);
+      keyupTimer = null;
+    }
+    var leave4 = $(evt.target).hasClass("paymentCards_number");
+    saveFieldChange(evt, {
+      obscureValue:true, 
+      clearSuffix: (leave4 ? 4 : 0)
+    });
+  });
+  $(".item_encvalue_edit_field").focus(function(evt) {
+    $(this).val("");
+  });
+
+}
+
+function renderJSON() {
+  $("#dump").empty();
+  for (var k in gProfiles) {
+    $("#dump").append($("<pre>").text(js_beautify(JSON.stringify(gProfiles[k].toPoCo()))));
+  }
 }
 
 </script>
-<style>
-BODY {
-  background-color:#f0f0f0;
-  margin:0;
-  padding:0;
-}
-
-#banner {
-  width:100%;
-  background-color:#778bee;
-  color:white;
-  font:bold 14pt Helvetica;
-  padding-top:4px;
-  padding-bottom:4px;
-  margin-bottom:32px;
-}
-#banner_r {
-  float:right;
-  font:bold 12pt Helvetica;
-}
-
-#info {
-  margin-left:40px;
-  padding:16px;
-  font:12pt Helvetica;
-  width:710px;
-  border-radius:6px;
-}
-
-.row {
-  display:block;
-  position:relative;
-  min-height:42px;
-  padding-bottom:12px;
-  margin-top:3px;
-  border-bottom:1px dotted #e0e0e0;
-}
-.label_main {
-  display:inline-block;
-  width:200px;
-  vertical-align:top;
-}
-.item_main {
-  display:inline-block;
-}
-.item_sub {
-  display:inline-block;
-  width:200px;
-}
-.label_sub {
-  display:inline-block;
-  width:200px;
-  font:9pt Helvetica;
-  color:#888;
-}
-.item_row {
-  display:block;
-}
-.width1 {
-  width:198px;
-}
-.width2 {
-  width:398px;
-}
-.scrolling_box {
-  height:96px;
-  width:398px;
-  font:9pt Helvetica;
-  overflow-y:auto;
-}
-
-.control_row {
-  margin-top:16px;
-  min-height:42px;
-  text-align:right;
-}
-.control_row button {
-}
-#control_result {
-  margin-top:4px;
-  font:italic 9pt Helvetica;
-  color:#449944;
-  -moz-transition:opacity 0.5s;
-  opacity:0;
-}
-#kicker {
-  margin-top:16px;
-  width:782px;
-  text-align:right;
-  font:8pt Helvetica;
-  color:#606060;
-}
-#kicker A {
-  color:#606060;
-}
-
-</style>
 </head>
 
 <body onLoad="init();">
@@ -205,117 +296,40 @@ BODY {
 
 <div id="info">
 
+<div id="pickerBar">Displaying profile: <select id="profilePicker"></select>
+</div>
+
+<div>
+<div id="encryptionBox"></div>
 <ul>
   <li><a href="#myprofile">My Profile</a></li>
-<!--
-  <li><a href="#publicview">Public View</a></li>
-  <li><a href="#tracking">Tracking</a></li>
--->
+  <li><a href="#payment">My Payment Cards</a></li>
 </ul>
-
-<div id="myprofile">
-
-<form onsubmit="return false;">
-
-<div class="row">
-<div class="label_main">Name</div>
-<div class="item_main">
-<div class="item_row">
-<div class="item_sub"><input class="width1" type="text" name="givenName"></div>
-<div class="item_sub"><input class="width1" type="text" name="familyName"></div>
-</div>
-<div class="item_row">
-<div class="label_sub">Given (First) Name</div>
-<div class="label_sub">Family (Last) Name</div>
-</div>
-</div>
-</div> <!-- end name -->
-
-<div class="row">
-<div class="label_main">Gender</div>
-<div class="item_main">
-<div class="item_row">
-  <input type="radio" name="gender" value="female">Female 
-  <input type="radio" name="gender" value="male">Male
-  <input type="radio" name="gender" value="undisclosed">NA/other/decline to state
-</div>
-</div>
-</div> <!-- end gender -->
-
-<div class="row">
-<div class="label_main">Birthday</div>
-<div class="item_main">
-<div class="item_row">
-<div class="item_sub"><input id="birthday" class="width1" type="text" name="birthday"></div>
-</div>
-</div>
-</div> <!-- end birthday -->
-
-
-<div class="row">
-<div class="label_main">Email Address</div>
-<div class="item_sub"><input class="width2" type="text" name="email"></div>
-</div> <!-- end email -->
-
-
-
-<div class="row">
-<div class="label_main">Home Address</div>
-<div class="item_main">
-
-<div class="item_row">
-<div class="item_sub"><input class="width2" type="text" name="address/street"></div>
-</div>
-<div class="item_row">
-<div class="label_sub">Street</div>
 </div>
 
-<div class="item_row">
-<div class="item_sub"><input class="width1" type="text" name="address/city"></div>
-<div class="item_sub"><input class="width1" type="text" name="address/state"></div>
-</div>
-<div class="item_row">
-<div class="label_sub">City</div>
-<div class="label_sub">State</div>
+<div id="myprofile" class="infobox">
+  <form onsubmit="return false;">
+    <div id="profiledetail"></div>
+  </form>
 </div>
 
-<div class="item_row">
-  <div class="item_sub"><input class="width1" type="text" name="address/postalCode"></div>
-  <div class="item_sub"><input class="width1" type="text" name="address/country"></div>
+<div id="payment" class="infobox">
+  <form onsubmit="return false;">
+    <div id="paymentdetail"></div>
+  </form>
 </div>
 
-  <div class="item_row">
-    <div class="label_sub">Postal/ZIP code</div>
-    <div class="label_sub">Country</div>
-  </div>
-</div>
-</div>
-
-</form>
-
-<div class="control_row">
-  <button onclick="save()">Save</button>
-  <div id="control_result"></div>
-</div>
-</div>
-<!-- end myprofile -->
-
-<div id="publicview">
-</div>
-
-<div id="tracking">
-</div>
 
 </div> <!-- end info -->
 
 <div id="kicker">A <a href="#">Mozilla Labs</a> Project &middot; <a href="http://mozilla.com/privacy">Privacy Policy</a></div>
 </body>
 
+<script src="/static/js/beautify.js"></script>
+<div id="dump" style="position:absolute;left:800px;top:50px;width:350px;word-wrap:break-word;font:8pt 'Lucida Grande',Arial"></div>
+
+<!-- Template Definitions -->
+{{ templates }}
+
 </html>
 
-
-
-
-
-
-</textarea>

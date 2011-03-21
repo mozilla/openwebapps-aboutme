@@ -1,0 +1,173 @@
+<script id="profile_option_tmpl" type="text/html">
+  <option value="${key}">${name}</option>
+</script>
+
+<script id="encryption_box_noencrypt_tmpl" type="text/html">
+Profile is not encrypted.
+</script>
+<script id="encryption_box_encryptnokey_tmpl" type="text/html">
+Profile is encrypted and locked.
+</script>
+<script id="encryption_box_havekey_tmpl" type="text/html">
+Profile is unlocked for changes.
+</script>
+
+<script id="profile_tmpl" type="text/html">
+</script>
+
+<script id="basic_row_tmpl" type="text/html">
+  <div class="row">
+    <div class="label_main">${label}</div>
+    <div class="item_sub"><input class="width${width} item_value_edit_field" id="field_birthday" type="text" name="${name}" value="${value}"></div>
+  </div>
+</script>
+
+<script id="name_row_tmpl" type="text/html">
+  <div class="row">
+    <div class="label_main">Name</div>
+    <div class="item_main">
+      <div class="item_row">
+        <div class="item_sub"><input class="width1 item_value_edit_field" id="field_name_givenName" type="text" name="givenName" value="${givenName}"></div>
+        <div class="item_sub"><input class="width1 item_value_edit_field" id="field_name_familyName" type="text" name="familyName" value="${familyName}"></div>
+      </div>
+    </div>
+  </div>
+</script>
+
+<script id="radio_row_tmpl" type="text/html">
+<div class="row">
+  <div class="label_main">${label}</div>
+  <div class="item_main">
+    <div class="item_row">
+        {{each options}}
+          <input type="radio" name="${name}" value="${$value.value}">${$value.label}</input>
+        {{/each}}
+    </div>
+  </div>
+</div>
+</script>
+
+<script id="simpleValueTemplate" type="text/x-jquery-tmpl"> 
+  <div class="item_value">
+  <input 
+    id="field_${name}_${i}_value"
+    type="text" 
+    class="item_value_edit_field ${name}_value width2"
+    value="${renderValue(anObj)}" />    
+  </div>
+</script>
+
+
+
+    <!--
+    {{if gActiveField !== anObj }}disabled="true"{{/if}}
+    -->
+
+<script id="addressValueTemplate" type="text/x-jquery-tmpl"> 
+
+<div class="item_value">
+  <div class="item_row">
+    <div class="item_sub"><input id="field_${name}_${i}_streetAddress" class="width2 item_value_edit_field address_street" type="text" name="address/street" value="${anObj.streetAddress}"></div>
+  </div>
+  <div class="item_row">
+    <div class="item_sub"><input id="field_${name}_${i}_locality" class="width1 item_value_edit_field address_city" type="text" name="address/city" value="${anObj.locality}"></div>
+    <div class="item_sub"><input id="field_${name}_${i}_region" class="width1 item_value_edit_field address_state" type="text" name="address/state" value="${anObj.region}"></div>
+  </div>
+  <div class="item_row">
+    <div class="item_sub"><input id="field_${name}_${i}_postalCode" class="width1 item_value_edit_field address_postalCode" type="text" name="address/postalCode" value="${anObj.postalCode}"></div>
+    <div class="item_sub"><input id="field_${name}_${i}_country" class="width1 item_value_edit_field address_country" type="text" name="address/country" value="${anObj.country}"></div>
+  </div>
+</div>
+
+</script>
+
+<script id="paymentCardValueTemplate" type="text/x-jquery-tmpl"> 
+
+<div class="item_value">
+  <div class="item_row">
+    <div class="item_sub">
+      <input id="field_${name}_${i}_cardholder" class="width2 item_value_edit_field paymentCards_cardholder" 
+        type="text" value="${anObj.cardholder}">
+    </div>
+  </div>
+  <div class="item_row">
+    <div class="item_sub">
+      <select>
+      {{each(i, address) getSelectedProfile().toPoCo().addresses }}
+        <option value="{$i}">${address.streetAddress}, ${address.locality}, ${address.region}</option>
+      {{/each}}
+      </select>
+      <input style="display:none" id="field_${name}_${i}_billingAddress" class="width2 item_value_edit_field paymentCards_billingAddress" 
+        type="text" value="${anObj.billingAddress}">
+    </div>
+  </div>
+  <div class="item_row">
+    <div class="item_sub">
+      <input id="field_${name}_${i}_number" class="width2 item_encvalue_edit_field paymentCards_number"
+        type="text" value="${obscureValue(anObj.number, 4)}">
+    </div>
+  </div>
+  <div class="item_row">
+    <div class="item_sub">
+      <input id="field_${name}_${i}_expiration" class="width1 item_value_edit_field paymentCards_expiration" 
+        type="text" name="address/city" value="${anObj.expiration}">
+    </div>
+    <div class="item_sub">
+      <input id="field_${name}_${i}_CCV" maxlength="3" class="width1 item_encvalue_edit_field paymentCards_CCV" 
+        type="text" name="address/state" value="${obscureValue(anObj.CCV)}">
+    </div>
+  </div>
+</div>
+
+</script>
+
+<script id="typed_list_row_tmpl" type="text/html">
+<div class="row">
+  <div class="label_main">${label}</div>
+  <div class="item_main" id="item_list_${name}">
+
+    {{each(i, anObj) values}}
+    <div id="item_list_${name}_${i}" class="item_row {{if gNewFieldAnimate === anObj }}isnew{{/if}}">
+
+        <select id="field_${name}_${i}_type" class="typed_list_type_picker item_value_edit_field" name="${label}-${i}">
+        {{each(j, typeLabel) typeLabels }}
+        <option value="${typeLabel.type}"
+          {{if anObj.type == typeLabel.type }}selected="true"{{/if}}
+        >${typeLabel.label}</option>
+        {{/each}}
+        </select>
+
+        {{tmpl({name:name, i:i, anObj:anObj, renderValue:renderValue}) itemTemplate }}
+        
+        <div class="item_list_control">
+          <!--<a id="edit:${name}:${i}" class="edit_list_item" href="#">Edit</a> |-->
+          <a id="remove:${name}:${i}" class="remove_list_item" href="#">Remove</a>
+        </div>
+    </div>
+    {{/each}}
+    
+    <div class="add_list_control"><a id="add_list_item_${name}" href="#"><div class="add_list_button"></div> Add new ${itemLabel}</a></div>
+  </div>
+</div>
+</script>
+
+
+<script id="account_list_row_tmpl" type="text/html">
+<div class="row">
+  <div class="label_main">${label}</div>
+  <div class="item_main">
+
+    {{each(i, anObj) values}}
+    <div class="item_row">
+      <div class="item_row_key">${anObj.domain}: </div>
+      <input type="text" name="${label}-${i}-username" value="${anObj.username}"></input>
+      <input type="text" name="${label}-${i}-userid" value="${anObj.userid}"></input>
+    </div>
+    {{/each}}
+
+    <div class="add_list_control"><a href="#"><div class="add_list_button"></div> Add new ${itemLabel}</a></div>
+
+  </div>
+</div>
+</script>
+

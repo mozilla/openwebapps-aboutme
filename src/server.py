@@ -18,7 +18,7 @@ class WebHandler(tornado.web.RequestHandler):
            "you should <a href='/'>return to the front page.</a><br><br><div class='small'>%s %s</div></div>" % (
           status_code, kwargs['exception'])
 
-  def render_platform(self, file, **kwargs):
+  def render_platform(self, file, templates=False, **kwargs):
     target_file = file
 
     if  "User-Agent" in self.request.headers:
@@ -27,15 +27,21 @@ class WebHandler(tornado.web.RequestHandler):
         target_file = target_file + "_iphone"
     if self.get_argument("cloak", None):
       target_file = file + "_" + self.get_argument("cloak", None)
-      
-    self.render(target_file + ".html", **kwargs)
+
+    tmpl = None
+    if templates:
+      f = open(target_file + ".tmpl", "r")
+      tmpl = f.read()
+      f.close() # cache this
+
+    self.render(target_file + ".html", templates=tmpl, **kwargs)
 
             
 # General, and user administration, handlers
 class MainHandler(WebHandler):
   def get(self):
     self.set_header("X-XRDS-Location", "%s/xrds" % config.DOMAIN)
-    self.render_platform("index", errorMessage=None)
+    self.render_platform("index", errorMessage=None, templates=True)
 
 class XRDSHandler(WebHandler):
   def get(self):

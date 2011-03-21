@@ -1,39 +1,66 @@
 <html>
-<head></head>
-<script src="/static/jschannel.js"></script>
+<head>
+<title>About:Me Service Invocation Frame</title>
+<script type="text/javascript" src="/static/js/jschannel.js"></script>
+<script type="text/javascript" src="/static/js/eventmixin.js"></script>
+<script type="text/javascript" src="/static/js/typed-storage.js"></script>
+<script type="text/javascript" src="/static/js/userdata.js"></script>
+<script type="text/javascript" src="/static/js/jquery-1.4.4.min.js"></script>
+
 <script>
 
-var chan = Channel.build({window: window.parent, origin: "*", scope: "aboutme"});
-var gPendingRequest;
-var gOfferedData;
+var chan, gPendingRequest, gOfferedData;
+var gRequestedArguments;
+var gProfiles = [];
+var gUserData = new UserData();
+
+chan = Channel.build({window: window.parent, origin: "*", scope: "http://localhost:8400/service"});
 
 chan.bind("profile.get", function(t, args) {
-
-  gOfferedData = getProfile(args);
+  gRequestedArguments = args;
   renderOffer();
-
-/*  t.delayReturn(true);
-  // when the user consents, we'll return
-  gPendingRequest = (function() {
-    return {
-      confirm: function(result) {
-        t.complete(result);
-      }
-    }
-  })();*/
 });
 
 chan.bind("confirm", function(t, args) {
   return gOfferedData;
 });
 
+function init() {
+  renderProfilePicker();
+}
+
+function getSelectedProfile() {
+  return gProfiles[$("#profilePicker").val()];
+}
+
+function renderProfilePicker() {
+  var profilePicker = $("#profilePicker");
+  profilePicker.empty();
+  gProfiles = {};
+
+  gUserData.getProfileKeys(function(keys) {
+    for (var i=0;i<keys.length;i++) {
+      gUserData.getProfile(keys[i], function(aProfile) { // XX async?
+        gProfiles[keys[i]] = aProfile;
+        profilePicker.append($("<option/>").attr({value:aProfile.key}).text(aProfile.name));
+      });
+    }
+    if (keys.length < 2) {
+//      $("#pickerBar").hide();
+    }
+  });
+}
+
 function confirm()
 {
   gPendingRequest.confirm(gOfferedData);
 }
 
-function getProfile(requested_fields) {
+function getOfferedData(requested_fields) {
   
+  dump("getOfferedData " + requested_fields + " " + typeof requested_fields + "\n");
+  
+    // recurse into profile data to handle split requested_fields
     function extractInto(srcObj, dstObj, tArray, idx) {
       var term = tArray[idx];
       if (srcObj[term]) {
@@ -48,46 +75,157 @@ function getProfile(requested_fields) {
     }
     
     var result = {};
-    
-    var profile_data = window.localStorage.getItem("profile");
+
+    var profile_data = getSelectedProfile();
     if (profile_data) {
-      var full_profile = JSON.parse(profile_data);
-      for (var f in requested_fields)
+      var profilePoCo = profile_data.toPoCo();
+      for (var i=0;i<requested_fields.length;i++)
       {
-        extractInto(full_profile, result, requested_fields[f].split("/"), 0);
+        extractInto(profilePoCo, result, requested_fields[i].split("/"), 0);
       }
     }
+    dump("getOfferedData returning " + JSON.stringify(result) + "\n");
     return result;
+}
+
+
+function renderTypeValueColumn(container, label)
+{
+  var box = $("<div class='row'/>");
+  var label = $("<div class='label'/>").text(label);
+  var value = $("<div class='value'/>");
+  box.append(label);
+  box.append(value);
+  container.append(box);
+  return value;
+}
+
+POCO_RENDERERS =
+{
+  name: function(container, val) {
+    // XX L10N for name order
+    var s;
+    if (val.givenName) {
+      if (val.familyName) {
+        s= val.givenName + " " + val.familyName;
+      } else {
+        s= val.givenName;
+      }
+    } else if (val.familyName) {
+      s= val.familyName;
+    }
+    renderTypeValueColumn(container, "Name:").text(s);
+  },
+  birthday: function(container, val) {
+    renderTypeValueColumn(container, "Birthday:").text(val.toString());
+  },
+  addresses: function(container, val) {
+    var valueBox = renderTypeValueColumn(container, "Address:");
+    val = val[0];
+
+    if (val.streetAddress) valueBox.append($("<div/>").text(val.streetAddress));
+    if (val.region && val.locality) valueBox.append($("<div/>").text(val.locality + ", " + val.region));
+    else if (val.region) valueBox.append($("<div/>").text(val.region));
+    else if (val.locality) valueBox.append($("<div/>").text(val.locality));
+    if (val.postalCode || val.country) valueBox.append($("<div/>").text(val.postalCode + " " + val.country ));
+  },
+  phoneNumbers: function(container, val) {
+    val = val[0];
+    renderTypeValueColumn(container, "Phone:").text(val.value);  
+  },
+  emails: function(container, val) {
+    val = val[0];
+    renderTypeValueColumn(container, "Email:").text(val.value);
+  }
+
 }
 
 function renderOffer()
 {
+  try {
+  gOfferedData = getOfferedData(gRequestedArguments);
+
   var container = document.getElementById("message");
   container.innerHTML = "";
-  container.appendChild(document.createTextNode("Imagine some nice rendering of this data..."));
+
   for (var k in gOfferedData) {
-    var div = document.createElement("div");
-    div.appendChild(document.createTextNode(k + ": " + JSON.stringify(gOfferedData[k])));
-    container.appendChild(div);
+    if (gOfferedData.hasOwnProperty(k)) {
+      var aDiv = $("<div class='previewValue'/>");
+      $(container).append(aDiv);
+      
+      if (POCO_RENDERERS[k]) {
+        POCO_RENDERERS[k](aDiv, gOfferedData[k]);
+      } else {
+        renderTypeValueColumn(aDiv, k + ":").text(JSON.stringify(gOfferedData[k]));
+      }
+    }
+  }
+  } catch (e) {
+    dump(e + "\n");
+    console.log(e);
   }
 }
 
 </script>
 <style>
 BODY {
-  font:9pt Helvetica;
-  background-color:#f0f0f8;
+  margin:0;
+  padding:0;
+  font:9pt "lucida grande",tahoma,verdana,arial,sans-serif;
+  background-color:white;
+  border-top:2px solid #d4d0cc;
+}
+#pickerBar {
+  background-color:#e4e0dc;
+  font-size:0.8em;
+  padding:4px;
+  margin-bottom:12px;
+  border-bottom:solid 1px #d4d0cc;
+  
+}
+
+#container {
+  padding:8px 4px 8px 8px;
 }
 .branding {
-  font: small-caption;
+  font:bold 9pt "lucida grande",tahoma,verdana,arial,sans-serif;
   margin-bottom:6px;
   color:black;
 }
+.previewValue {
+  display:inline-block;
+  width:230px;
+}
+
+.row {
+  min-height:18px;
+  margin-bottom:2px;
+}
+
+.label {
+  display:inline-block;
+  vertical-align:top;
+  font:bold 9pt "lucida grande",tahoma,verdana,arial,sans-serif;
+  width:80px;
+}
+.value {
+  display:inline-block;
+  vertical-align:top;
+  font:9pt "lucida grande",tahoma,verdana,arial,sans-serif;
+}
+
 </style>
-<body>
-<div class="branding">about:me by Mozilla</div>
+<body onLoad="init()">
+<div id="container">
+<div id="pickerBar">Using profile: <select id="profilePicker"></select>
+</div>
 
+<!--
+<div class="branding">about:me by Mozilla</div>-->
+<div id="message_container">
 <div id="message"></div>
-
+<div id="customize"></div>
+</div>
+</div>
 </body>
 </html>
