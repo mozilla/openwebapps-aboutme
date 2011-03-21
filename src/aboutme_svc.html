@@ -58,8 +58,6 @@ function confirm()
 
 function getOfferedData(requested_fields) {
   
-  dump("getOfferedData " + requested_fields + " " + typeof requested_fields + "\n");
-  
     // recurse into profile data to handle split requested_fields
     function extractInto(srcObj, dstObj, tArray, idx) {
       var term = tArray[idx];
@@ -84,7 +82,6 @@ function getOfferedData(requested_fields) {
         extractInto(profilePoCo, result, requested_fields[i].split("/"), 0);
       }
     }
-    dump("getOfferedData returning " + JSON.stringify(result) + "\n");
     return result;
 }
 
@@ -143,25 +140,24 @@ POCO_RENDERERS =
 function renderOffer()
 {
   try {
-  gOfferedData = getOfferedData(gRequestedArguments);
+    gOfferedData = getOfferedData(gRequestedArguments);
 
-  var container = document.getElementById("message");
-  container.innerHTML = "";
+    var container = document.getElementById("message");
+    container.innerHTML = "";
 
-  for (var k in gOfferedData) {
-    if (gOfferedData.hasOwnProperty(k)) {
-      var aDiv = $("<div class='previewValue'/>");
-      $(container).append(aDiv);
-      
-      if (POCO_RENDERERS[k]) {
-        POCO_RENDERERS[k](aDiv, gOfferedData[k]);
-      } else {
-        renderTypeValueColumn(aDiv, k + ":").text(JSON.stringify(gOfferedData[k]));
+    for (var k in gOfferedData) {
+      if (gOfferedData.hasOwnProperty(k)) {
+        var aDiv = $("<div class='previewValue'/>");
+        $(container).append(aDiv);
+        
+        if (POCO_RENDERERS[k]) {
+          POCO_RENDERERS[k](aDiv, gOfferedData[k]);
+        } else {
+          renderTypeValueColumn(aDiv, k + ":").text(JSON.stringify(gOfferedData[k]));
+        }
       }
     }
-  }
   } catch (e) {
-    dump(e + "\n");
     console.log(e);
   }
 }
